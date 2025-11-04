@@ -227,7 +227,7 @@ def compute_position_consistency(
 
 def summarize_multi_scale(
     multi_scale_data: dict[int, list[ActivatingExample]],
-) -> dict[str, any]:
+) -> dict[str, Any]:
     """
     Generate a comprehensive summary of multi-scale behavior.
 

@@ -10,7 +10,6 @@ from delphi.latents.latents import ActivatingExample, ActivationData
 from delphi.latents.multi_scale_analysis import (
     classify_feature_scale,
     compare_scales,
-    compute_position_consistency,
     compute_scale_sensitivity,
     summarize_multi_scale,
 )
@@ -319,27 +318,6 @@ def test_compute_scale_sensitivity():
         assert sensitivity[ctx_size] >= 0.0
 
 
-def test_compute_position_consistency():
-    """Test position consistency computation."""
-    torch.manual_seed(42)
-
-    context_sizes = [16, 32]
-    multi_scale_data = {}
-
-    for ctx_size in context_sizes:
-        examples = []
-        for i in range(10):
-            tokens = torch.randint(0, 1000, (ctx_size,))
-            activations = torch.zeros(ctx_size)
-            # Activate at center
-            activations[ctx_size // 2] = 5.0
-            examples.append(ActivatingExample(tokens=tokens, activations=activations))
-        multi_scale_data[ctx_size] = examples
-
-    consistency = compute_position_consistency(multi_scale_data)
-
-    # Should be high since all activate at center
-    assert 0.0 <= consistency <= 1.0
 
 
 def test_summarize_multi_scale():
@@ -367,23 +345,30 @@ def test_summarize_multi_scale():
     assert "max_activation_by_scale" in summary
     assert "frequency_by_scale" in summary
     assert "scale_sensitivity" in summary
-    assert "position_consistency" in summary
     assert "dominant_scale" in summary
+    assert "max_growth_ratio" in summary
+    assert "max_correlation" in summary
 
     # Verify types
     assert isinstance(summary["scale_type"], str)
     assert isinstance(summary["activation_variance"], float)
     assert isinstance(summary["dominant_scale"], int)
+    assert isinstance(summary["max_growth_ratio"], float)
+    assert isinstance(summary["max_correlation"], float)
+
+    # Verify value ranges
+    assert summary["max_growth_ratio"] >= 0.0
+    assert -1.0 <= summary["max_correlation"] <= 1.0
 
 
 def test_classify_feature_scale_edge_cases():
     """Test classification with edge cases."""
     # Empty data
-    result = classify_feature_scale([], {}, 0.0)
+    result = classify_feature_scale([], {}, {}, 0.0)
     assert result == "unknown"
 
     # Single scale
-    result = classify_feature_scale([32], {32: 5.0}, 0.0)
+    result = classify_feature_scale([32], {32: 5.0}, {32: 5.0}, 0.0)
     assert result in ["token", "phrase", "sentence", "paragraph", "unknown"]
 
 

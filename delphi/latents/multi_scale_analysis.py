@@ -58,6 +58,7 @@ def compare_scales(
     scale_type = classify_feature_scale(
         context_sizes=context_sizes,
         avg_activation_by_scale=avg_activation_by_scale,
+        max_activation_by_scale=max_activation_by_scale,
         activation_variance=activation_variance,
     )
 
@@ -74,6 +75,7 @@ def compare_scales(
 def classify_feature_scale(
     context_sizes: list[int],
     avg_activation_by_scale: dict[int, float],
+    max_activation_by_scale: dict[int, float],
     activation_variance: float,
     variance_threshold: float = 0.1,
 ) -> Literal["token", "phrase", "sentence", "paragraph", "unknown"]:
@@ -83,6 +85,7 @@ def classify_feature_scale(
     Args:
         context_sizes: List of context sizes.
         avg_activation_by_scale: Average activation at each scale.
+        max_activation_by_scale: Maximum activation at each scale.
         activation_variance: Variance of activations across scales.
         variance_threshold: Threshold for classifying as token-level.
 
@@ -92,22 +95,55 @@ def classify_feature_scale(
     if not context_sizes or not avg_activation_by_scale:
         return "unknown"
 
-    # Get normalized activation curve
-    values = [avg_activation_by_scale[ctx] for ctx in context_sizes]
-    max_val = max(values) if max(values) > 0 else 1.0
-    normalized = [v / max_val for v in values]
+    # Get normalized activation curves for both avg and max
+    avg_values = [avg_activation_by_scale[ctx] for ctx in context_sizes]
+    max_values = [max_activation_by_scale[ctx] for ctx in context_sizes]
 
-    # Find peak scale
-    peak_idx = normalized.index(max(normalized))
+    max_avg_val = max(avg_values) if max(avg_values) > 0 else 1.0
+    normalized_avg = [v / max_avg_val for v in avg_values]
+
+    # Find peak scale for average activations
+    peak_idx = normalized_avg.index(max(normalized_avg))
     peak_scale = context_sizes[peak_idx]
 
-    # Token-level: Low variance, similar activations at all scales
-    if activation_variance < variance_threshold:
+    # Compute max activation growth trend
+    if len(context_sizes) >= 2 and max_values[0] > 0:
+        max_growth_ratio = max_values[-1] / max_values[0]
+
+        # Compute correlation between scale size and max activation
+        sizes_mean = sum(context_sizes) / len(context_sizes)
+        max_mean = sum(max_values) / len(max_values)
+
+        covariance = sum(
+            (ctx - sizes_mean) * (max_val - max_mean)
+            for ctx, max_val in zip(context_sizes, max_values)
+        ) / len(context_sizes)
+
+        size_std = (sum((ctx - sizes_mean) ** 2 for ctx in context_sizes) / len(context_sizes)) ** 0.5
+        max_std = (sum((m - max_mean) ** 2 for m in max_values) / len(max_values)) ** 0.5
+
+        if size_std > 0 and max_std > 0:
+            max_correlation = covariance / (size_std * max_std)
+        else:
+            max_correlation = 0.0
+    else:
+        max_growth_ratio = 1.0
+        max_correlation = 0.0
+
+    # Token-level: Low variance AND low max activation growth
+    # Features that don't need more context will have similar max activations across scales
+    if activation_variance < variance_threshold and max_growth_ratio < 1.2:
         return "token"
 
     # Phrase-level: Peak at small scales (8-16 tokens)
-    if peak_scale <= 16:
+    # OR moderate growth but peaks early
+    if peak_scale <= 16 and max_correlation < 0.7:
         return "phrase"
+
+    # Paragraph-level: Strong correlation between scale and max activation
+    # Features that need long context will activate more strongly with more tokens
+    if max_correlation > 0.7 and max_growth_ratio > 1.5:
+        return "paragraph"
 
     # Sentence-level: Peak at medium scales (32-64 tokens)
     if peak_scale <= 64:
@@ -118,8 +154,8 @@ def classify_feature_scale(
     if len(context_sizes) >= 3:
         # Compute trend: do activations generally increase?
         increasing_trend = sum(
-            values[i + 1] > values[i] for i in range(len(values) - 1)
-        ) / (len(values) - 1)
+            avg_values[i + 1] > avg_values[i] for i in range(len(avg_values) - 1)
+        ) / (len(avg_values) - 1)
         if increasing_trend > 0.6:  # 60% of transitions are increases
             return "paragraph"
 
@@ -161,68 +197,6 @@ def compute_scale_sensitivity(
     return sensitivity
 
 
-def compute_position_consistency(
-    multi_scale_data: dict[int, list[ActivatingExample]],
-) -> float:
-    """
-    Compute how consistently the same relative positions activate across scales.
-
-    Args:
-        multi_scale_data: Dictionary mapping context_size -> examples.
-
-    Returns:
-        Consistency score between 0 and 1.
-    """
-    context_sizes = sorted(multi_scale_data.keys())
-
-    if len(context_sizes) < 2:
-        return 1.0
-
-    # For each pair of consecutive scales, compute position overlap
-    overlaps = []
-
-    for i in range(len(context_sizes) - 1):
-        smaller_ctx = context_sizes[i]
-        larger_ctx = context_sizes[i + 1]
-
-        smaller_examples = multi_scale_data[smaller_ctx]
-        larger_examples = multi_scale_data[larger_ctx]
-
-        if not smaller_examples or not larger_examples:
-            continue
-
-        # Compare activation positions (relative to center)
-        smaller_positions = []
-        for ex in smaller_examples:
-            # Find positions with activation > 0
-            active_pos = (ex.activations > 0).nonzero(as_tuple=True)[0]
-            # Normalize to [-0.5, 0.5] relative to center
-            center = ex.activations.shape[0] / 2
-            rel_pos = [(p.item() - center) / center for p in active_pos]
-            smaller_positions.extend(rel_pos)
-
-        larger_positions = []
-        for ex in larger_examples:
-            active_pos = (ex.activations > 0).nonzero(as_tuple=True)[0]
-            center = ex.activations.shape[0] / 2
-            rel_pos = [(p.item() - center) / center for p in active_pos]
-            larger_positions.extend(rel_pos)
-
-        if smaller_positions and larger_positions:
-            # Compute overlap (simple heuristic: both should have activations near center)
-            smaller_near_center = sum(abs(p) < 0.3 for p in smaller_positions) / len(
-                smaller_positions
-            )
-            larger_near_center = sum(abs(p) < 0.3 for p in larger_positions) / len(
-                larger_positions
-            )
-            overlap = min(smaller_near_center, larger_near_center)
-            overlaps.append(overlap)
-
-    if not overlaps:
-        return 1.0
-
-    return float(torch.tensor(overlaps).mean())
 
 
 def summarize_multi_scale(
@@ -239,7 +213,31 @@ def summarize_multi_scale(
     """
     comparison = compare_scales(multi_scale_data)
     sensitivity = compute_scale_sensitivity(multi_scale_data)
-    consistency = compute_position_consistency(multi_scale_data)
+
+    # Compute max activation growth metrics
+    context_sizes = sorted(multi_scale_data.keys())
+    max_values = [comparison.max_activation_by_scale[ctx] for ctx in context_sizes if ctx in comparison.max_activation_by_scale]
+
+    if len(max_values) >= 2 and max_values[0] > 0:
+        max_growth_ratio = max_values[-1] / max_values[0]
+
+        # Compute correlation
+        sizes_mean = sum(context_sizes) / len(context_sizes)
+        max_mean = sum(max_values) / len(max_values)
+        covariance = sum(
+            (ctx - sizes_mean) * (max_val - max_mean)
+            for ctx, max_val in zip(context_sizes, max_values)
+        ) / len(context_sizes)
+        size_std = (sum((ctx - sizes_mean) ** 2 for ctx in context_sizes) / len(context_sizes)) ** 0.5
+        max_std = (sum((m - max_mean) ** 2 for m in max_values) / len(max_values)) ** 0.5
+
+        if size_std > 0 and max_std > 0:
+            max_correlation = covariance / (size_std * max_std)
+        else:
+            max_correlation = 0.0
+    else:
+        max_growth_ratio = 1.0
+        max_correlation = 0.0
 
     return {
         "scale_type": comparison.scale_type,
@@ -248,7 +246,8 @@ def summarize_multi_scale(
         "max_activation_by_scale": comparison.max_activation_by_scale,
         "frequency_by_scale": comparison.frequency_by_scale,
         "scale_sensitivity": sensitivity,
-        "position_consistency": consistency,
+        "max_growth_ratio": max_growth_ratio,
+        "max_correlation": max_correlation,
         "dominant_scale": max(
             comparison.avg_activation_by_scale.items(), key=lambda x: x[1]
         )[0]

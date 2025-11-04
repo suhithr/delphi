@@ -136,3 +136,8 @@ upload_to_vcs_release = true
 
 [tool.pytest.ini_options]
 beartype_packages = "delphi"
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.1.0",
+]

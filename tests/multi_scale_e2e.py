@@ -173,7 +173,8 @@ async def test():
                         "scale_type": summary["scale_type"],
                         "dominant_scale": summary["dominant_scale"],
                         "activation_variance": summary["activation_variance"],
-                        "position_consistency": summary["position_consistency"],
+                        "max_growth_ratio": summary["max_growth_ratio"],
+                        "max_correlation": summary["max_correlation"],
                     }
                 )
 
@@ -181,7 +182,8 @@ async def test():
                 print(f"  Scale type: {summary['scale_type']}")
                 print(f"  Dominant scale: {summary['dominant_scale']} tokens")
                 print(f"  Activation variance: {summary['activation_variance']:.4f}")
-                print(f"  Position consistency: {summary['position_consistency']:.4f}")
+                print(f"  Max activation growth ratio: {summary['max_growth_ratio']:.4f}")
+                print(f"  Max activation correlation: {summary['max_correlation']:.4f}")
 
     multi_scale_time = time.time() - start_time
     print(f"\nMulti-scale analysis completed in {multi_scale_time:.2f} seconds")
@@ -206,7 +208,8 @@ async def test():
         ]
         assert result["dominant_scale"] >= 0
         assert result["activation_variance"] >= 0.0
-        assert 0.0 <= result["position_consistency"] <= 1.0
+        assert result["max_growth_ratio"] >= 0.0
+        assert -1.0 <= result["max_correlation"] <= 1.0
 
     print("\n✅ End-to-end multi-scale test passed!")
     print(f"Total time: {pipeline_time + multi_scale_time:.2f} seconds")

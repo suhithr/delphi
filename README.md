@@ -1,3 +1,5 @@
+Note: Running the default pipeline requires atleast ~140GB of GPU memory (the explainer model is llama 70B).
+
 # Introduction
 
 Delphi was the home of a temple to Phoebus Apollo, which famously had the inscription, 'Know Thyself.' This library lets language models know themselves through automated interpretability.
@@ -8,9 +10,11 @@ The branch used for the article [Automatically Interpreting Millions of Features
 
 # Installation
 
-Install this library as a local editable installation. Run the following command from the `delphi` directory.
-
-```pip install -e .```
+Install this with [uv](https://docs.astral.sh/uv/). Run the following command from the `delphi` directory.
+```
+uv python pin 3.10
+uv pip install -e .[dev, visualize]
+```
 
 # Getting Started
 

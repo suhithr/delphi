@@ -34,7 +34,10 @@ def import_plotly():
             "Please install it using `pip install plotly`, "
             "or install the `[visualize]` extra."
         )
-    pio.kaleido.scope.mathjax = None  # https://github.com/plotly/plotly.py/issues/3469
+    # Fix MathJax bug if kaleido scope is available
+    # https://github.com/plotly/plotly.py/issues/3469
+    if pio.kaleido.scope is not None:
+        pio.kaleido.scope.mathjax = None
     return px
 
 

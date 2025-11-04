@@ -120,6 +120,69 @@ class NonActivatingExample(Example):
 
 
 @dataclass
+class MultiScaleExample:
+    """
+    An example with activations at multiple context scales.
+    """
+
+    base_position: tuple[int, int]
+    """Position in original sequence (batch_idx, seq_pos)."""
+
+    scales: dict[int, ActivatingExample] = field(default_factory=dict)
+    """Maps context_size -> ActivatingExample at that scale."""
+
+    @property
+    def activation_variance(self) -> float:
+        """
+        Variance in max activation across scales.
+
+        Returns:
+            float: The variance of max activations across scales.
+        """
+        if not self.scales:
+            return 0.0
+        max_acts = torch.tensor([ex.max_activation for ex in self.scales.values()])
+        return float(max_acts.var())
+
+    @property
+    def dominant_scale(self) -> int:
+        """
+        The scale with the highest activation.
+
+        Returns:
+            int: The context size with the highest activation.
+        """
+        if not self.scales:
+            return 0
+        return max(self.scales.items(), key=lambda x: x[1].max_activation)[0]
+
+
+@dataclass
+class ScaleComparisonResult:
+    """
+    Result of comparing feature activations across scales.
+    """
+
+    context_sizes: list[int]
+    """The context sizes that were compared."""
+
+    avg_activation_by_scale: dict[int, float]
+    """Average activation magnitude at each scale."""
+
+    max_activation_by_scale: dict[int, float]
+    """Maximum activation magnitude at each scale."""
+
+    frequency_by_scale: dict[int, float]
+    """Activation frequency at each scale."""
+
+    activation_variance: float
+    """Variance of average activations across scales."""
+
+    scale_type: str = ""
+    """Classified scale type: 'token', 'phrase', 'sentence', 'paragraph'."""
+
+
+@dataclass
 class LatentRecord:
     """
     A record of latent data.

@@ -99,12 +99,32 @@ class CacheConfig(Serializable):
 
 
 @dataclass
+class MultiScaleConfig(Serializable):
+    enabled: bool = False
+    """Whether to enable multi-scale analysis."""
+
+    context_sizes: list[int] = list_field(default=[8, 16, 32, 64])
+    """Context window sizes to compare."""
+
+    n_examples_per_scale: int = 50
+    """Number of examples to extract at each scale."""
+
+    min_examples: int = 10
+    """Minimum examples required for multi-scale analysis."""
+
+    variance_threshold: float = 0.1
+    """Variance threshold for token-level classification."""
+
+
+@dataclass
 class RunConfig(Serializable):
     cache_cfg: CacheConfig
 
     constructor_cfg: ConstructorConfig
 
     sampler_cfg: SamplerConfig
+
+    multi_scale_cfg: MultiScaleConfig = field(default_factory=MultiScaleConfig)
 
     model: str = field(
         default="meta-llama/Meta-Llama-3-8B",

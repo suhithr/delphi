@@ -38,7 +38,7 @@ class ConstructorConfig(Serializable):
     faiss_embedding_cache_enabled: bool = True
     """Whether to cache embeddings for FAISS similarity search."""
 
-    example_ctx_len: int = 32
+    example_ctx_len: int = 256
     """Length of each sampled example sequence. Longer sequences
     reduce detection scoring performance in weak models.
     Has to be a multiple of the cache context length."""
@@ -100,9 +100,6 @@ class CacheConfig(Serializable):
 
 @dataclass
 class MultiScaleConfig(Serializable):
-    enabled: bool = False
-    """Whether to enable multi-scale analysis."""
-
     context_sizes: list[int] = list_field(default=[8, 16, 32, 64])
     """Context window sizes to compare."""
 

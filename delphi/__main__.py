@@ -29,7 +29,7 @@ from delphi.log.result_analysis import log_results
 from delphi.pipeline import Pipe, Pipeline, process_wrapper
 from delphi.scorers import DetectionScorer, FuzzingScorer, OpenAISimulator
 from delphi.sparse_coders import load_hooks_sparse_coders, load_sparse_coders
-from delphi.utils import assert_type, load_tokenized_data
+from delphi.utils import assert_type, base_path_cfg_aware, load_tokenized_data
 
 
 def load_artifacts(run_cfg: RunConfig):
@@ -384,11 +384,7 @@ def non_redundant_hookpoints(
 async def run(
     run_cfg: RunConfig,
 ):
-    base_path = Path.cwd() / "results"
-    if run_cfg.name:
-        base_path = base_path / run_cfg.name
-
-    base_path.mkdir(parents=True, exist_ok=True)
+    base_path = base_path_cfg_aware(run_cfg)
 
     run_cfg.save_json(base_path / "run_config.json", indent=4)
 

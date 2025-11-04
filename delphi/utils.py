@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any, TypeVar, cast
 
 import numpy as np
@@ -101,3 +102,12 @@ def to_int64_tensor(tensor: np.ndarray) -> Tensor:
     result = torch.zeros(t.shape[0] * multiplier, dtype=signed_torch_dtype)
     result[::multiplier] = t
     return result.view(torch.int64).view(og_shape)
+
+def base_path_cfg_aware(run_cfg: "RunConfig") -> Path:
+    """Compute the base_path for results, creating it if necessary."""
+    base_path = Path.cwd() / "results"
+    if run_cfg.name:
+        base_path = base_path / run_cfg.name
+
+    base_path.mkdir(parents=True, exist_ok=True)
+    return base_path
